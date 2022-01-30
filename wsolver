@@ -1,0 +1,146 @@
+#!/bin/sh
+# Simple script to solve Wordle
+
+dict=$(cat "${2:-wordle.txt}")
+
+c1='\033[1;33m'
+c2='\033[m'
+
+newline="
+"
+
+print() {
+    printf '%b%s%b %s\n' \
+        "$c1" "${2:-->}" "$c2" "$1" >&2
+}
+
+# string indexing
+index() {
+    printf '%s' "$1" | cut -c "$(($2+1))"
+}
+
+split() {
+    IFS=: read -r "$2" "$3" <<EOF
+$1
+EOF
+}
+
+# printf & grep
+pg() {
+    printf '%s' "${3:-$dict}" | ${2:-grep} "$1"
+}
+
+shrink() {
+    for list in "$grey" "$yellow"; do
+        [ "$list" = "$grey" ] && grp="grep -v" || grp="grep"
+        for letter in $list; do
+            dict=$(pg "$letter" "$grp")
+        done
+    done
+}
+
+yellowX() {
+    for tmp in $grox; do
+        [ "$tmp" = "....." ] || {
+            [ "$tmp" = "$tmp_yellow" ] || {
+                j=0; while [ "$j" -lt "${#tmp}" ]; do
+                    [ "$(index "$tmp" "$j")" = "$(index "$tmp_yellow" "$j")" ] || {
+                            tmp_yellow="$(
+                                [ "$j" = 0 ] || {
+                                    printf '%s' "$tmp_yellow" | cut -c "1-$j"
+                                })$(index "$tmp" "$j")$(printf '%s' "$tmp_yellow" | cut -c "$(( j + 2 ))-${#tmp}")"
+                    }
+                j="$(( j + 1 ))"; done
+            }
+            dict=$(pg "$tmp_yellow" "grep -v")
+        }
+    done
+}
+
+greenX() {
+    [ "$green" = "$tmp_green" ] || {
+        j=0; while [ "$j" -lt "${#green}" ]; do
+            [ "$(index "$green" "$j")" = "$(index "$tmp_green" "$j")" ] || {
+                    tmp_green="$(
+                        [ "$j" = 0 ] || {
+                            printf '%s' "$tmp_green" | cut -c "1-$j"
+                        })$(index "$green" "$j")$(printf '%s' "$tmp_green" | cut -c "$(( j + 2 ))-${#green}")"
+            }
+        j="$(( j + 1 ))"; done
+    }
+    dict=$(pg "$tmp_green")
+}
+
+#xyz() {}
+
+check() {
+    green=''
+
+    i=0; while [ "$i" -lt "${#word}" ]; do
+        case "$(index "$cord" "$i")" in
+            '+')
+                green="$green$(index "$word" $i)"
+            ;;
+            '?')
+                yellow="$yellow$(index "$word" $i) "
+                green="$green."
+
+                case "$i" in
+                    0) grox="$grox$(index "$word" $i)....$newline" ;;
+                    1) grox="$grox.$(index "$word" $i)...$newline" ;;
+                    2) grox="$grox..$(index "$word" $i)..$newline" ;;
+                    3) grox="$grox...$(index "$word" $i).$newline" ;;
+                    4) grox="$grox....$(index "$word" $i)$newline" ;;
+                esac
+            ;;
+            '_')
+                grey="$grey$(index "$word" $i) "
+                green="$green."
+            ;;
+        esac
+    i="$(( i + 1 ))"; done
+}
+
+sovle() {
+    dict=$(printf '%s' "$dict" | grep -x '.\{5,5\}')
+    shrink
+    greenX
+    yellowX
+
+    print "Possible words:"
+    printf '%s\n' "$dict"
+}
+
+bestie() {
+    best="$dict"
+
+    alfa=$(printf '%s' "$best" | grep -o . | sort | uniq -c | sort -nr)
+    alfa=$(printf '%s' "$alfa" | sed 's/[[:digit:]]//g')
+    alfa=$(printf '%s' "$alfa" | sed 's/ //g')
+
+    for letter in $alfa; do
+        tmp=$(pg "$letter" grep "$best" || exit 0)
+
+        [ "${#tmp}" != 0 ] && best="$tmp"
+    done
+
+    print "Suggestion:"
+    printf '%s\n' "$best"
+}
+
+# main()
+{
+    # enable exit on error and disable globbing
+    set -ef
+
+    while :; do
+        print "Enter word:"
+        print "Ctrl+C to abort"
+        read -r try
+        printf "\n"
+        split "$try" word cord
+        check "$try"
+        sovle
+        bestie
+    done
+}
