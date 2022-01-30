@@ -1,5 +1,8 @@
 #!/bin/sh
 # Simple script to solve Wordle
+#
+# false positive
+# shellcheck disable=2154
 
 dict=$(cat "${2:-wordle.txt}")
 
